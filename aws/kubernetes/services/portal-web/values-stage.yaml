@@ -1,0 +1,25 @@
+# 서비스별 Helm values로, 이미지/Ingress/HPA/리소스 정책을 환경에 맞게 조정합니다.
+# prod는 가용성과 확장성을 우선하고 dev/stage는 검증 효율과 비용 균형을 중점으로 둡니다.
+
+nameOverride: portal-web
+image:
+  repository: ghcr.io/elice/portal-web
+  tag: "stage-latest"
+replicaCount: 1
+service:
+  port: 80
+  targetPort: 8080
+resources:
+  requests: { cpu: "100m", memory: "128Mi" }
+  limits: { cpu: "300m", memory: "384Mi" }
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+ingress:
+  enabled: true
+  className: alb
+  host: portal.stage.elice.com
+  path: /
+  pathType: Prefix

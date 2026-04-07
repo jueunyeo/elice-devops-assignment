@@ -1,0 +1,40 @@
+# 서비스별 Helm values로, 이미지/Ingress/HPA/리소스 정책을 환경에 맞게 조정합니다.
+# prod는 가용성과 확장성을 우선하고 dev/stage는 검증 효율과 비용 균형을 중점으로 둡니다.
+
+# DB: Vault `elice/onprem/prod/user-api/database` → Secret `elice-user-api-db-onprem-prod` (elice-prod)
+nameOverride: user-api
+image:
+  repository: harbor.elice.com/elice/user-api
+  tag: "prod-latest"
+replicaCount: 3
+service:
+  port: 80
+  targetPort: 8080
+podAnnotations:
+  elice.io/service-pattern: "http-db"
+extraEnvFrom:
+  - secretRef:
+      name: elice-user-api-db-onprem-prod
+resources:
+  requests: { cpu: "250m", memory: "320Mi" }
+  limits: { cpu: "900m", memory: "1Gi" }
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+ingress:
+  enabled: true
+  className: nginx
+  useAwsAlb: false
+  host: user-api.elice.com
+  path: /
+  pathType: Prefix
+database:
+  migration:
+    enabled: true
+    sqlMigrationConfigMap: user-api-migrations
+    envFrom:
+      - secretRef:
+          name: elice-user-api-db-onprem-prod

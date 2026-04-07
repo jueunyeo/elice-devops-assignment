@@ -1,0 +1,28 @@
+# ArgoCD 선언 파일로, Git 상태를 클러스터 상태와 동기화하는 GitOps 배포 기준을 정의합니다.
+# AWS와 On-prem은 values/ingress/secret 경로만 다르고 배포 패턴은 동일하게 유지합니다.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  # App-of-Apps Root (On-prem):
+  # - on-prem/kubernetes/argocd/apps 하위 child Application의 배포 일관성을 보장합니다.
+  name: elice-onprem-root-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/jueunyeo/elice-devops-assignment.git
+    targetRevision: main
+    path: on-prem/kubernetes/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PruneLast=true

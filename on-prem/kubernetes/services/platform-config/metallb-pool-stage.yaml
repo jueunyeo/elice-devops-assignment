@@ -1,0 +1,20 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# Stage: Prod와 동일 토폴로지(별도 대역으로 격리)
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: elice-onprem-stage-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 10.50.20.0/28
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: elice-onprem-stage-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - elice-onprem-stage-pool

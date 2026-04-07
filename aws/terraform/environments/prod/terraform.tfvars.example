@@ -1,0 +1,12 @@
+aws_region  = "ap-northeast-2"
+environment = "prod"
+vpc_cidr    = "10.0.0.0/16"
+
+azs = [
+  "ap-northeast-2a",
+  "ap-northeast-2b",
+  "ap-northeast-2c"
+]
+
+db_username = "elice_admin"
+db_password = "<set-via-secure-channel>"

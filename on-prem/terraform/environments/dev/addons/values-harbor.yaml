@@ -1,0 +1,25 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# Harbor Helm 차트용 예시 값 (실제 설치: helm repo add harbor https://helm.goharbor.io)
+# 환경: on-prem-dev — 리소스·복제는 Stage/Prod 대비 축소
+expose:
+  type: clusterIP
+  tls:
+    enabled: false
+
+persistence:
+  enabled: true
+
+trivy:
+  enabled: true
+
+notary:
+  enabled: false
+
+resources:
+  registry:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+
+externalURL: https://harbor.dev.elice.com

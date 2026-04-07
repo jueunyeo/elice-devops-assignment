@@ -1,0 +1,20 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+apiVersion: v1
+kind: Service
+metadata:
+  # 공통 Service 템플릿(Common Service Template):
+  # - 서비스별 값(values)만 교체하여 동일한 네트워크 규격을 재사용합니다.
+  name: {{ include "elice-common.fullname" . }}
+  labels:
+    {{- include "elice-common.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "elice-common.selectorLabels" . | nindent 4 }}

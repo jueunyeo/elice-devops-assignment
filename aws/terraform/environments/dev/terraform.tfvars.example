@@ -1,0 +1,5 @@
+aws_region  = "ap-northeast-2"
+environment = "dev"
+
+db_username = "elice_dev_admin"
+db_password = "<set-via-secure-channel>"

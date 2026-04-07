@@ -1,0 +1,24 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# MinIO 버킷 정책 예시 (앱 SA 또는 서비스 계정에 최소 권한)
+# 적용: mc anonymous set-json 또는 MinIO Operator Console / mc ilm
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elice-minio-policy-dev
+  namespace: minio-tenant-dev
+data:
+  elice-media-dev-policy.json: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+          "Resource": [
+            "arn:aws:s3:::elice-media-dev",
+            "arn:aws:s3:::elice-media-dev/*"
+          ]
+        }
+      ]
+    }

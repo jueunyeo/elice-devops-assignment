@@ -1,0 +1,15 @@
+vsphere_server   = "vcenter.example.local"
+vsphere_user     = "administrator@vsphere.local"
+vsphere_password = "use-env-or-vault-not-git"
+
+datacenter_name = "dc1"
+datastore_name  = "datastore1"
+cluster_name    = "cluster1"
+network_name    = "vm-network"
+template_name   = "ubuntu-22.04-k8s-template"
+
+environment   = "prod"
+worker_count  = 3
+vm_num_cpus   = 8
+vm_memory_mb  = 16384
+vm_disk_gb    = 200

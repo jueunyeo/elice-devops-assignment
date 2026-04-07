@@ -1,0 +1,39 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+{{- if .Values.hpa.enabled }}
+# HorizontalPodAutoscaler(HPA) 표준 템플릿:
+# - CPU Utilization 임계치 기반으로 Pod를 탄력적으로 Scale-out/Scale-in 합니다.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "elice-common.fullname" . }}
+  labels:
+    {{- include "elice-common.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "elice-common.fullname" . }}
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.targetCPUUtilizationPercentage }}
+    {{- if .Values.hpa.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  {{- with .Values.hpa.behavior }}
+  behavior:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

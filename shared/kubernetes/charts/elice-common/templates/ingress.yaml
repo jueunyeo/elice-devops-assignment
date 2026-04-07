@@ -1,0 +1,37 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+{{- if .Values.ingress.enabled }}
+# Ingress 공통 템플릿:
+# - useAwsAlb=true 이면 AWS ALB annotations를 적용하고,
+# - 그렇지 않으면 On-prem Nginx/MetalLB 경로를 사용합니다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "elice-common.fullname" . }}
+  labels:
+    {{- include "elice-common.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.useAwsAlb }}
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    {{- end }}
+    {{- range $key, $value := .Values.ingress.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "elice-common.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

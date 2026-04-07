@@ -1,0 +1,9 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+apiVersion: v2
+name: elice-common
+description: Common Helm chart for Elice microservices
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

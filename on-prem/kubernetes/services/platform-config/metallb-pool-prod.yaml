@@ -1,0 +1,20 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# Prod: 고가용성 워크로드용 충분한 VIP 대역
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: elice-onprem-prod-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 10.50.30.0/26
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: elice-onprem-prod-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - elice-onprem-prod-pool

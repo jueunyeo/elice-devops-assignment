@@ -1,0 +1,29 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# Harbor — Prod (고가용성·보안 강화)
+expose:
+  type: clusterIP
+  tls:
+    enabled: true
+    certSource: secret
+
+persistence:
+  enabled: true
+
+trivy:
+  enabled: true
+
+notary:
+  enabled: true
+
+chartmuseum:
+  enabled: false
+
+resources:
+  registry:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+
+# 이중화·외부 DB/Redis 연동은 조직 표준에 맞게 추가
+externalURL: https://harbor.prod.elice.com

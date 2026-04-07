@@ -1,0 +1,132 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# 기본 Replica 수(Default Replica Count):
+# - HPA가 활성화되어도 최소 시작 Pod baseline으로 사용됩니다.
+replicaCount: 2
+
+image:
+  repository: "ghcr.io/elice/sample-service"
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "256Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+probes:
+  liveness:
+    path: /healthz
+    port: http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    path: /readyz
+    port: http
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+
+hpa:
+  # HPA 기본 전략(Default Scaling Policy):
+  # - CPU 기준 평균 사용률을 임계치로 사용하며, 서비스별 values에서 재정의 가능합니다.
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 20
+          periodSeconds: 60
+
+ingress:
+  enabled: true
+  className: alb
+  useAwsAlb: true
+  annotations: {}
+  host: sample.elice.example.com
+  path: /
+  pathType: Prefix
+
+podAnnotations: {}
+podLabels: {}
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+topologySpreadConstraints:
+  enabled: true
+  zone:
+    maxSkew: 1
+    whenUnsatisfiable: DoNotSchedule
+    topologyKey: topology.kubernetes.io/zone
+  node:
+    maxSkew: 1
+    whenUnsatisfiable: ScheduleAnyway
+    topologyKey: kubernetes.io/hostname
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# 런타임 자격 증명은 Kubernetes Secret(ESO가 동기화한 오브젝트)에서만 주입합니다. 평문 금지.
+extraEnv: []
+extraEnvFrom: []
+
+database:
+  migration:
+    enabled: false
+    image:
+      repository: flyway/flyway
+      tag: latest
+      pullPolicy: IfNotPresent
+    # 서비스별 db/migration SQL을 담은 ConfigMap 이름.
+    # 예: kubectl create configmap user-api-migrations --from-file=db/migration
+    sqlMigrationConfigMap: ""
+    sqlMountPath: /flyway/sql
+    command:
+      - sh
+      - -c
+      - >
+        flyway
+        -url=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+        -user=${DB_USER}
+        -password=${DB_PASSWORD}
+        -locations=filesystem:/flyway/sql
+        migrate
+    # ExternalSecret이 만든 Secret을 envFrom으로 주입 (권장). 설정 시 아래 env 평문은 사용하지 않음.
+    envFrom: []
+    # 레거시/로컬 테스트용. 운영에서는 envFrom + ESO만 사용.
+    env:
+      DB_HOST: ""
+      DB_PORT: "5432"
+      DB_NAME: ""
+      DB_USER: ""
+      DB_PASSWORD: ""

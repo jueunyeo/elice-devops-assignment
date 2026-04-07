@@ -1,0 +1,176 @@
+name: Terraform GitOps
+
+on:
+  pull_request:
+    paths:
+      - "aws/terraform/environments/**"
+      - "on-prem/terraform/environments/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "aws/terraform/environments/**"
+      - "on-prem/terraform/environments/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-plan:
+    if: github.event_name == 'pull_request'
+    name: Terraform Plan (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: aws-dev
+            path: aws/terraform/environments/dev
+          - name: aws-stage
+            path: aws/terraform/environments/stage
+          - name: aws-prod
+            path: aws/terraform/environments/prod
+          - name: on-prem-dev
+            path: on-prem/terraform/environments/dev
+          - name: on-prem-stage
+            path: on-prem/terraform/environments/stage
+          - name: on-prem-prod
+            path: on-prem/terraform/environments/prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Terraform Init
+        id: init
+        working-directory: ${{ matrix.path }}
+        run: terraform init -input=false
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ matrix.path }}
+        run: |
+          set +e
+          terraform plan -input=false -no-color -out=tfplan > plan.txt 2>&1
+          PLAN_EXIT_CODE=$?
+          cat plan.txt
+          echo "plan_exit_code=${PLAN_EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Comment Plan to PR
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_PATH: ${{ matrix.path }}
+          PLAN_EXIT_CODE: ${{ steps.plan.outputs.plan_exit_code }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const marker = `<!-- terraform-plan:${process.env.MATRIX_NAME} -->`;
+            let planOutput = "No plan output generated.";
+            try {
+              planOutput = fs.readFileSync(`${process.env.MATRIX_PATH}/plan.txt`, "utf8");
+            } catch (error) {
+              planOutput = `Failed to read plan output: ${error.message}`;
+            }
+
+            const status = process.env.PLAN_EXIT_CODE === "0" ? "SUCCESS" : "FAILED";
+            const body = `${marker}
+            ## Terraform Plan: ${process.env.MATRIX_NAME} (${status})
+            \`\`\`
+            ${planOutput.slice(0, 60000)}
+            \`\`\``;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+
+            const existing = comments.find((comment) => comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
+
+      - name: Fail if Plan failed
+        if: steps.plan.outputs.plan_exit_code != '0'
+        run: |
+          echo "Terraform plan failed for ${{ matrix.path }}"
+          exit 1
+
+  terraform-apply:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Terraform Apply (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: aws-dev
+            path: aws/terraform/environments/dev
+          - name: aws-stage
+            path: aws/terraform/environments/stage
+          - name: aws-prod
+            path: aws/terraform/environments/prod
+          - name: on-prem-dev
+            path: on-prem/terraform/environments/dev
+          - name: on-prem-stage
+            path: on-prem/terraform/environments/stage
+          - name: on-prem-prod
+            path: on-prem/terraform/environments/prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Terraform Init
+        working-directory: ${{ matrix.path }}
+        run: terraform init -input=false
+
+      - name: Terraform Apply
+        working-directory: ${{ matrix.path }}
+        run: terraform apply -input=false -auto-approve

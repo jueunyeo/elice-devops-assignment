@@ -1,0 +1,103 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+name: Main CI
+
+on:
+  push:
+    paths:
+      - "aws/kubernetes/services/portal-web/**"
+      - "aws/kubernetes/services/api-gateway/**"
+      - "aws/kubernetes/services/user-api/**"
+      - "aws/kubernetes/services/media-manager/**"
+  pull_request:
+    paths:
+      - "aws/kubernetes/services/portal-web/**"
+      - "aws/kubernetes/services/api-gateway/**"
+      - "aws/kubernetes/services/user-api/**"
+      - "aws/kubernetes/services/media-manager/**"
+
+permissions:
+  contents: write
+
+jobs:
+  build-push-and-update:
+    name: Build/Push/Update (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - portal-web
+          - api-gateway
+          - user-api
+          - media-manager
+    env:
+      AWS_REGION: ap-northeast-2
+      SERVICE_NAME: ${{ matrix.service }}
+      VALUES_FILE: aws/kubernetes/services/${{ matrix.service }}/values-prod.yaml
+      IMAGE_TAG: ${{ github.sha }}
+      # Dockerfile 경로로 대치할 것.
+      DOCKER_CONTEXT: ${{ matrix.service }}
+      DOCKERFILE: ${{ matrix.service }}/Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set short SHA
+        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Verify Docker build inputs
+        run: |
+          test -d "${DOCKER_CONTEXT}" || (echo "Missing Docker build context: ${DOCKER_CONTEXT}" && exit 1)
+          test -f "${DOCKERFILE}" || (echo "Missing Dockerfile: ${DOCKERFILE}" && exit 1)
+          test -f "${VALUES_FILE}" || (echo "Missing values file: ${VALUES_FILE}" && exit 1)
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          IMAGE_URI="${ECR_REGISTRY}/${SERVICE_NAME}:${IMAGE_TAG}"
+          docker build -t "${IMAGE_URI}" -f "${DOCKERFILE}" "${DOCKER_CONTEXT}"
+          docker push "${IMAGE_URI}"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Update values-prod image tag
+        run: |
+          yq -i '.image.tag = strenv(IMAGE_TAG)' "${VALUES_FILE}"
+          echo "Updated ${VALUES_FILE} image.tag to ${IMAGE_TAG}"
+
+      - name: Commit and push manifest update
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- "${VALUES_FILE}"; then
+            echo "No manifest change for ${SERVICE_NAME}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${VALUES_FILE}"
+          git commit -m "chore(ci): update ${SERVICE_NAME} image tag to ${IMAGE_TAG} [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

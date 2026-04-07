@@ -1,0 +1,25 @@
+# Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+
+# Harbor — Stage (Prod 미러링 정책: 동일 구성 권장, 트래픽/복제만 축소)
+expose:
+  type: clusterIP
+  tls:
+    enabled: true
+    certSource: secret
+
+persistence:
+  enabled: true
+
+trivy:
+  enabled: true
+
+notary:
+  enabled: true
+
+resources:
+  registry:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+
+externalURL: https://harbor.stage.elice.com

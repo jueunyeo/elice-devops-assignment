@@ -1,0 +1,5 @@
+aws_region  = "ap-northeast-2"
+environment = "stage"
+
+db_username = "elice_stg_admin"
+db_password = "<set-via-secure-channel>"

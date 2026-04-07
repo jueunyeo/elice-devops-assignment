@@ -1,0 +1,128 @@
+# 공통 Helm 차트 템플릿으로, 서비스 간 배포 규약(Deployment/Ingress/HPA)을 일관되게 유지합니다.
+# 환경 차이는 개별 values 파일에서 주입하고 템플릿 로직은 가능한 단순하게 유지합니다.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # 공통 Deployment 템플릿:
+  # - anti-affinity, probes, resources, envFrom, migration initContainer를 통합 제공합니다.
+  name: {{ include "elice-common.fullname" . }}
+  labels:
+    {{- include "elice-common.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "elice-common.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "elice-common.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.topologySpreadConstraints.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpreadConstraints.zone.maxSkew }}
+          topologyKey: {{ .Values.topologySpreadConstraints.zone.topologyKey }}
+          whenUnsatisfiable: {{ .Values.topologySpreadConstraints.zone.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "elice-common.selectorLabels" . | nindent 14 }}
+        - maxSkew: {{ .Values.topologySpreadConstraints.node.maxSkew }}
+          topologyKey: {{ .Values.topologySpreadConstraints.node.topologyKey }}
+          whenUnsatisfiable: {{ .Values.topologySpreadConstraints.node.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "elice-common.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      affinity:
+        # 노드 분산 배치(Workload Resilience):
+        # - 동일 서비스 Pod가 같은 노드에 몰리지 않도록 강제합니다.
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "elice-common.selectorLabels" . | nindent 18 }}
+              topologyKey: kubernetes.io/hostname
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "elice-common.serviceAccountName" . }}
+      {{- else if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+      {{- if .Values.database.migration.enabled }}
+      # DB migration initContainer:
+      # - 서비스 시작 전 schema migration을 실행하여 애플리케이션/DB 스키마 불일치를 완화합니다.
+      initContainers:
+        - name: db-migration
+          image: "{{ .Values.database.migration.image.repository }}:{{ .Values.database.migration.image.tag }}"
+          imagePullPolicy: {{ .Values.database.migration.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.database.migration.command | nindent 12 }}
+          {{- with .Values.database.migration.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- else }}
+          env:
+            - name: DB_HOST
+              value: {{ .Values.database.migration.env.DB_HOST | quote }}
+            - name: DB_PORT
+              value: {{ .Values.database.migration.env.DB_PORT | quote }}
+            - name: DB_NAME
+              value: {{ .Values.database.migration.env.DB_NAME | quote }}
+            - name: DB_USER
+              value: {{ .Values.database.migration.env.DB_USER | quote }}
+            - name: DB_PASSWORD
+              value: {{ .Values.database.migration.env.DB_PASSWORD | quote }}
+          {{- end }}
+          volumeMounts:
+            - name: migration-sql
+              mountPath: {{ .Values.database.migration.sqlMountPath | quote }}
+              readOnly: true
+      {{- end }}
+      containers:
+        - name: {{ include "elice-common.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: {{ .Values.probes.liveness.port }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: {{ .Values.probes.readiness.port }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.database.migration.enabled }}
+      volumes:
+        - name: migration-sql
+          configMap:
+            name: {{ .Values.database.migration.sqlMigrationConfigMap | quote }}
+            optional: true
+      {{- end }}
