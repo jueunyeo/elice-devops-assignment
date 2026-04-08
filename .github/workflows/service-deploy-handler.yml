@@ -1,0 +1,78 @@
+name: Service Deploy Handler
+
+on:
+  repository_dispatch:
+    types: [service-deploy]
+
+permissions:
+  contents: write
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_NAME: ${{ github.event.client_payload.service_name }}
+      TARGET_ENV: ${{ github.event.client_payload.target_env }}
+      IMAGE_TAG: ${{ github.event.client_payload.image_tag }}
+      TARGET_PLATFORM: ${{ github.event.client_payload.target_platform || 'aws' }}
+      APPROVED_SERVICES: "api-gateway portal-web user-api media-manager"
+      APPROVED_ENVS: "dev stage prod"
+      APPROVED_PLATFORMS: "aws on-prem"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate dispatch payload and whitelist
+        id: validate
+        run: |
+          set -euo pipefail
+
+          test -n "${SERVICE_NAME}" || { echo "service_name is required"; exit 1; }
+          test -n "${TARGET_ENV}" || { echo "target_env is required"; exit 1; }
+          test -n "${IMAGE_TAG}" || { echo "image_tag is required"; exit 1; }
+
+          case " ${APPROVED_SERVICES} " in
+            *" ${SERVICE_NAME} "*) ;;
+            *) echo "service_name '${SERVICE_NAME}' is not approved"; exit 1 ;;
+          esac
+
+          case " ${APPROVED_ENVS} " in
+            *" ${TARGET_ENV} "*) ;;
+            *) echo "target_env '${TARGET_ENV}' is not approved"; exit 1 ;;
+          esac
+
+          case " ${APPROVED_PLATFORMS} " in
+            *" ${TARGET_PLATFORM} "*) ;;
+            *) echo "target_platform '${TARGET_PLATFORM}' is not approved"; exit 1 ;;
+          esac
+
+          TARGET_FILE="${TARGET_PLATFORM}/kubernetes/services/${SERVICE_NAME}/values-${TARGET_ENV}.yaml"
+          if [ ! -f "${TARGET_FILE}" ]; then
+            echo "Target file does not exist: ${TARGET_FILE}"
+            exit 1
+          fi
+
+          echo "target_file=${TARGET_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup yq
+        uses: mikefarah/yq@v4
+
+      - name: Update image tag with yq
+        run: |
+          set -euo pipefail
+          yq -i '.image.tag = strenv(IMAGE_TAG)' "${{ steps.validate.outputs.target_file }}"
+          echo "Updated image.tag in ${{ steps.validate.outputs.target_file }} to ${IMAGE_TAG}"
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "${{ steps.validate.outputs.target_file }}"; then
+            echo "No change detected for ${{ steps.validate.outputs.target_file }}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ steps.validate.outputs.target_file }}"
+          git commit -m "[Deploy] ${SERVICE_NAME} to ${TARGET_ENV} with tag ${IMAGE_TAG} [skip ci]"
+          git push
