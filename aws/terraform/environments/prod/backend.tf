@@ -3,10 +3,10 @@
 
 terraform {
   backend "s3" {
-    bucket         = "elice-prod-terraform-state"
-    key            = "terraform/aws/prod/terraform.tfstate"
+    bucket         = "elice-management-terraform-state"
+    key            = "prod/terraform.tfstate"
     region         = "ap-northeast-2"
-    dynamodb_table = "elice-prod-terraform-locks"
+    dynamodb_table = "elice-management-terraform-locks"
     encrypt        = true
   }
 }

@@ -12,18 +12,6 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project     = "elice"
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
-  }
-}
-
 locals {
   name_prefix = "elice-${var.environment}"
 

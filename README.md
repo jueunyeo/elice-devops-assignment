@@ -19,7 +19,7 @@
 
 1. **Ingress/LoadBalancer**: 외부 트래픽을 수용하여 서비스로 전달합니다.
 2. **Internal LB**: 내부 서비스 간 통신 시 로드밸런싱을 수행합니다.
-3. **Persistence Layer**: 서비스 특성에 따라 RDS(AWS) 또는 Postgres-HA(On-prem)로 데이터를 영속화합니다.
+3. **Persistence Layer**: 환경 특성에 따라 RDS(AWS) 또는 Postgres-HA(On-prem)로 데이터를 영속화합니다.
 
 ---
 
@@ -41,7 +41,7 @@
 
 #### **(1) 관리 편의성 (Management Convenience)**
 
-- **AWS Managed**: 인프라 하위 계층(물리 서버, 하이퍼바이저, 네트워크 가동)의 운영 부담을 AWS가 전담합니다. 특히 EKS, RDS와 같은 Managed 서비스를 통해 OS 패치, 백업, 고가용성 구성을 자동화하여 엔지니어는 비즈니스 로직 및 애플리케이션 최적화에만 집중할 수 있는 **운영 효율성(Operational Efficiency)**을 제공합니다.
+- **AWS Managed**: 인프라 하위 계층(물리 서버, 하이퍼바이저, 네트워크 가동)의 운영 부담을 AWS가 전담합니다. 특히 EKS, RDS와 같은 Managed 서비스를 통해 OS 패치, 백업, 고가용성 구성을 자동화하여 엔지니어는 비즈니스 로직 및 애플리케이션 최적화에만 집중할 수 있는 **운영 효율성**을 제공합니다.
 - **On-premise**: 서버 랙 실장부터 케이블링, vSphere 하이퍼바이저 관리, OS 커널 업데이트까지 전체 스택(Full Stack Ownership)을 내부 인력이 직접 관리해야 합니다. 하드웨어 장애 시 부품 조달 및 교체 등 **물리적 유지보수에 상당한 시간과 인력**이 소모되어 운영 부하가 상대적으로 높습니다.
 
 #### **(2) 민첩성 (Agility)**
@@ -67,7 +67,7 @@
 
 ```text
 elice-devops-assignment/
-├── .github/workflows/          # [CI] Terraform Plan/Apply 자동화 파이프라인
+├── .github/workflows/          # [CI] 자동화 파이프라인
 ├── aws/
 │   ├── terraform/             # [IaC] AWS 인프라 정의 (VPC, EKS, RDS, S3)
 │   │   ├── bootstrap/         # Backend(S3/DynamoDB) 초기 구축용
@@ -102,6 +102,14 @@ elice-devops-assignment/
 ### **Environment Isolation**
 
 `dev`, `stage`, `prod` 환경을 디렉토리 수준에서 완전히 물리적으로 격리하였으며, 각 환경별로 독립적인 `tfvars`와 Backend 설정을 가집니다.
+
+### **Multi-Account Architecture (AWS Organizations)**
+
+AWS 환경은 `dev`, `stage`, `prod`를 각각 별도 AWS Account로 분리하고, Management Account를 컨트롤 플레인으로 사용하는 구조로 운영합니다.
+
+- **Account Isolation**: 환경 단위 계정 분리를 통해 장애 전파 범위와 권한 경계를 최소화합니다.
+- **Provider Assume Role**: 각 환경 Terraform은 `OrganizationAccountAccessRole`을 Assume 하여 대상 계정에 배포합니다.
+- **Environment Account ID Parameterization**: `aws_account_id` 변수를 통해 환경별 대상 Account를 선언적으로 주입합니다.
 
 ### **State Management & Locking**
 

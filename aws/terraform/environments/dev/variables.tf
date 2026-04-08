@@ -7,6 +7,11 @@ variable "aws_region" {
   default     = "ap-northeast-2"
 }
 
+variable "aws_account_id" {
+  description = "AWS account ID for development environment"
+  type        = string
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string

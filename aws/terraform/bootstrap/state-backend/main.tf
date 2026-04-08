@@ -17,39 +17,24 @@ provider "aws" {
 }
 
 locals {
-  # backend_names: { env => { bucket, lock_table } }
-  backend_names = {
-    dev = {
-      bucket     = "${var.project}-dev-terraform-state"
-      lock_table = "${var.project}-dev-terraform-locks"
-    }
-    stage = {
-      bucket     = "${var.project}-stage-terraform-state"
-      lock_table = "${var.project}-stage-terraform-locks"
-    }
-    prod = {
-      bucket     = "${var.project}-prod-terraform-state"
-      lock_table = "${var.project}-prod-terraform-locks"
-    }
-  }
+  # Management account hosts all environment states.
+  state_bucket_name = "${var.project}-management-terraform-state"
+  lock_table_name   = "${var.project}-management-terraform-locks"
 }
 
 resource "aws_s3_bucket" "tf_state" {
-  for_each = local.backend_names
-
-  bucket        = each.value.bucket
+  bucket        = local.state_bucket_name
   force_destroy = false
 
   tags = {
     Project     = var.project
-    Environment = each.key
+    Environment = "management"
     Purpose     = "terraform-state"
   }
 }
 
 resource "aws_s3_bucket_versioning" "tf_state" {
-  for_each = local.backend_names
-  bucket   = aws_s3_bucket.tf_state[each.key].id
+  bucket = aws_s3_bucket.tf_state.id
 
   versioning_configuration {
     status = "Enabled"
@@ -57,8 +42,7 @@ resource "aws_s3_bucket_versioning" "tf_state" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "tf_state" {
-  for_each = local.backend_names
-  bucket   = aws_s3_bucket.tf_state[each.key].id
+  bucket = aws_s3_bucket.tf_state.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -68,8 +52,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "tf_state" {
 }
 
 resource "aws_s3_bucket_public_access_block" "tf_state" {
-  for_each = local.backend_names
-  bucket   = aws_s3_bucket.tf_state[each.key].id
+  bucket = aws_s3_bucket.tf_state.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -78,8 +61,6 @@ resource "aws_s3_bucket_public_access_block" "tf_state" {
 }
 
 data "aws_iam_policy_document" "deny_insecure_transport" {
-  for_each = local.backend_names
-
   statement {
     sid    = "DenyInsecureTransport"
     effect = "Deny"
@@ -89,8 +70,8 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
     }
     actions = ["s3:*"]
     resources = [
-      aws_s3_bucket.tf_state[each.key].arn,
-      "${aws_s3_bucket.tf_state[each.key].arn}/*"
+      aws_s3_bucket.tf_state.arn,
+      "${aws_s3_bucket.tf_state.arn}/*"
     ]
     condition {
       test     = "Bool"
@@ -102,16 +83,12 @@ data "aws_iam_policy_document" "deny_insecure_transport" {
 
 resource "aws_s3_bucket_policy" "tf_state" {
   # Enforce TLS-only access for state buckets.
-  for_each = local.backend_names
-
-  bucket = aws_s3_bucket.tf_state[each.key].id
-  policy = data.aws_iam_policy_document.deny_insecure_transport[each.key].json
+  bucket = aws_s3_bucket.tf_state.id
+  policy = data.aws_iam_policy_document.deny_insecure_transport.json
 }
 
 resource "aws_dynamodb_table" "tf_locks" {
-  for_each = local.backend_names
-
-  name         = each.value.lock_table
+  name         = local.lock_table_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -122,15 +99,13 @@ resource "aws_dynamodb_table" "tf_locks" {
 
   tags = {
     Project     = var.project
-    Environment = each.key
+    Environment = "management"
     Purpose     = "terraform-locking"
   }
 }
 
 resource "aws_dynamodb_table_point_in_time_recovery" "tf_locks" {
   # PITR improves lock table recoverability during operational incidents.
-  for_each = local.backend_names
-
-  table_name                 = aws_dynamodb_table.tf_locks[each.key].name
+  table_name                 = aws_dynamodb_table.tf_locks.name
   point_in_time_recovery_enabled = true
 }

@@ -1,44 +1,42 @@
-name: Terraform GitOps
+name: Terraform AWS Multi-Account
 
 on:
   pull_request:
     paths:
       - "aws/terraform/environments/**"
-      - "on-prem/terraform/environments/**"
+      - "aws/terraform/modules/**"
       - ".github/workflows/terraform.yml"
   push:
     branches:
       - main
     paths:
       - "aws/terraform/environments/**"
-      - "on-prem/terraform/environments/**"
+      - "aws/terraform/modules/**"
       - ".github/workflows/terraform.yml"
 
 permissions:
   contents: read
+  id-token: write
   pull-requests: write
 
 jobs:
   terraform-plan:
     if: github.event_name == 'pull_request'
-    name: Terraform Plan (${{ matrix.name }})
+    name: Terraform Plan (${{ matrix.environment }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: aws-dev
+          - environment: dev
             path: aws/terraform/environments/dev
-          - name: aws-stage
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          - environment: stage
             path: aws/terraform/environments/stage
-          - name: aws-prod
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_STAGE }}
+          - environment: prod
             path: aws/terraform/environments/prod
-          - name: on-prem-dev
-            path: on-prem/terraform/environments/dev
-          - name: on-prem-stage
-            path: on-prem/terraform/environments/stage
-          - name: on-prem-prod
-            path: on-prem/terraform/environments/prod
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_PROD }}
 
     steps:
       - name: Checkout
@@ -49,17 +47,19 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (management)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_MANAGEMENT_GHA_ROLE_ARN }}
           aws-region: ap-northeast-2
+          role-session-name: gha-tf-plan-${{ matrix.environment }}
 
       - name: Terraform Init
         id: init
         working-directory: ${{ matrix.path }}
         run: terraform init -input=false
+        env:
+          TF_VAR_aws_account_id: ${{ matrix.aws_account_id }}
 
       - name: Terraform Plan
         id: plan
@@ -68,15 +68,17 @@ jobs:
           set +e
           terraform plan -input=false -no-color -out=tfplan > plan.txt 2>&1
           PLAN_EXIT_CODE=$?
-          cat plan.txt
+          cat plan.txt || true
           echo "plan_exit_code=${PLAN_EXIT_CODE}" >> "$GITHUB_OUTPUT"
           exit 0
+        env:
+          TF_VAR_aws_account_id: ${{ matrix.aws_account_id }}
 
       - name: Comment Plan to PR
         if: always()
         uses: actions/github-script@v7
         env:
-          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_NAME: ${{ matrix.environment }}
           MATRIX_PATH: ${{ matrix.path }}
           PLAN_EXIT_CODE: ${{ steps.plan.outputs.plan_exit_code }}
         with:
@@ -132,24 +134,21 @@ jobs:
 
   terraform-apply:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    name: Terraform Apply (${{ matrix.name }})
+    name: Terraform Apply (${{ matrix.environment }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: aws-dev
+          - environment: dev
             path: aws/terraform/environments/dev
-          - name: aws-stage
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_DEV }}
+          - environment: stage
             path: aws/terraform/environments/stage
-          - name: aws-prod
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_STAGE }}
+          - environment: prod
             path: aws/terraform/environments/prod
-          - name: on-prem-dev
-            path: on-prem/terraform/environments/dev
-          - name: on-prem-stage
-            path: on-prem/terraform/environments/stage
-          - name: on-prem-prod
-            path: on-prem/terraform/environments/prod
+            aws_account_id: ${{ vars.AWS_ACCOUNT_ID_PROD }}
 
     steps:
       - name: Checkout
@@ -160,17 +159,21 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (management)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_MANAGEMENT_GHA_ROLE_ARN }}
           aws-region: ap-northeast-2
+          role-session-name: gha-tf-apply-${{ matrix.environment }}
 
       - name: Terraform Init
         working-directory: ${{ matrix.path }}
         run: terraform init -input=false
+        env:
+          TF_VAR_aws_account_id: ${{ matrix.aws_account_id }}
 
       - name: Terraform Apply
         working-directory: ${{ matrix.path }}
         run: terraform apply -input=false -auto-approve
+        env:
+          TF_VAR_aws_account_id: ${{ matrix.aws_account_id }}
