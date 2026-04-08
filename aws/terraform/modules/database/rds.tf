@@ -43,6 +43,21 @@ resource "aws_security_group" "rds" {
   })
 }
 
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for ${var.identifier} RDS encryption"
+  deletion_window_in_days = var.kms_key_deletion_window_in_days
+  enable_key_rotation     = true
+
+  tags = merge(local.common_tags, {
+    Name = "${var.identifier}-rds-kms"
+  })
+}
+
+resource "aws_kms_alias" "rds" {
+  name          = "alias/${var.identifier}-rds"
+  target_key_id = aws_kms_key.rds.key_id
+}
+
 resource "aws_db_instance" "postgres" {
   identifier                  = var.identifier
   engine                      = "postgres"
@@ -50,6 +65,8 @@ resource "aws_db_instance" "postgres" {
   instance_class              = var.instance_class
   allocated_storage           = var.allocated_storage
   storage_type                = "gp3"
+  storage_encrypted           = true
+  kms_key_id                  = aws_kms_key.rds.arn
   db_name                     = var.db_name
   username                    = var.username
   password                    = var.password
@@ -61,7 +78,7 @@ resource "aws_db_instance" "postgres" {
   # Multi-AZ 가용성(Availability):
   # - prod에서는 multi_az=true를 사용하여 AZ 장애 시 자동 Failover를 기대합니다.
   multi_az                    = var.multi_az
-  deletion_protection         = var.deletion_protection
+  deletion_protection         = true
   skip_final_snapshot         = false
   final_snapshot_identifier   = "${var.identifier}-final-snapshot"
   auto_minor_version_upgrade  = true

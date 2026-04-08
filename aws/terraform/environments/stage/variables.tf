@@ -78,6 +78,18 @@ variable "eks_max_size" {
   default     = 6
 }
 
+variable "eks_public_access_cidrs" {
+  description = "Allowed CIDR blocks for EKS public API endpoint access"
+  type        = list(string)
+  default     = ["10.10.0.0/16"]
+}
+
+variable "ecr_repository_names" {
+  description = "ECR repositories with scan-on-push enabled"
+  type        = list(string)
+  default     = ["api-gateway", "portal-web", "user-api", "media-manager"]
+}
+
 variable "db_name" {
   description = "Database name"
   type        = string

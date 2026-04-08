@@ -23,3 +23,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "kms_key_deletion_window_in_days" {
+  description = "KMS key deletion window for S3 encryption key."
+  type        = number
+  default     = 30
+}

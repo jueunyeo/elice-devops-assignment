@@ -1,4 +1,6 @@
 # Kubernetes/Helm 설정 파일입니다. 운영 정책을 선언형으로 관리합니다.
+# 보안 원칙: Harbor 관리자 비밀번호/DB/Redis 자격증명은 이 파일에 평문으로 두지 않습니다.
+# External Secrets(Vault) 또는 별도 Secret 관리 체계로 주입하세요.
 
 # Harbor Helm 차트용 예시 값 (실제 설치: helm repo add harbor https://helm.goharbor.io)
 # 환경: on-prem-dev — 리소스·복제는 Stage/Prod 대비 축소

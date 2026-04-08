@@ -22,6 +22,11 @@ variable "private_subnet_ids" {
   type        = list(string)
 }
 
+variable "public_access_cidrs" {
+  description = "Allowed CIDR blocks for EKS public API endpoint access."
+  type        = list(string)
+}
+
 variable "node_group_name" {
   description = "Managed node group name"
   type        = string
@@ -75,4 +80,10 @@ variable "eso_allowed_secret_arns" {
   description = "Allowed AWS Secrets Manager ARNs for ESO read access"
   type        = list(string)
   default     = ["*"]
+}
+
+variable "ecr_repository_names" {
+  description = "ECR repositories to create with image scan-on-push."
+  type        = list(string)
+  default     = []
 }

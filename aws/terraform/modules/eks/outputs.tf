@@ -25,3 +25,8 @@ output "eso_irsa_role_arn" {
   description = "IAM role ARN for external-secrets via IRSA"
   value       = var.enable_irsa_for_eso ? aws_iam_role.eso_irsa[0].arn : null
 }
+
+output "ecr_repository_urls" {
+  description = "Created ECR repository URLs with scan-on-push enabled."
+  value       = { for name, repo in aws_ecr_repository.service : name => repo.repository_url }
+}

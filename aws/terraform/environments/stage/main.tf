@@ -42,12 +42,14 @@ module "eks" {
   kubernetes_version = "1.30"
   vpc_id             = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
+  public_access_cidrs = var.eks_public_access_cidrs
   node_group_name    = "primary"
   instance_types          = var.eks_instance_types
   desired_size            = var.eks_desired_size
   min_size                = var.eks_min_size
   max_size                = var.eks_max_size
   eso_allowed_secret_arns = var.eso_allowed_secret_arns
+  ecr_repository_names    = var.ecr_repository_names
   tags                    = local.common_tags
 }
 
