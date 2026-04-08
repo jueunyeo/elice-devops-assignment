@@ -21,6 +21,37 @@
 2. **Internal LB**: 내부 서비스 간 통신 시 로드밸런싱을 수행합니다.
 3. **Persistence Layer**: 환경 특성에 따라 RDS(AWS) 또는 Postgres-HA(On-prem)로 데이터를 영속화합니다.
 
+```mermaid
+graph LR
+    U[External User]
+
+    PW[portal-web]
+    AG[api-gateway]
+    UA[user-api]
+    MM[media-manager]
+
+    U --> PW
+    U --> AG
+    PW --> AG
+    AG --> UA
+    AG --> MM
+
+    subgraph AWS_Environment[Data Layer - AWS]
+      RDS[(AWS RDS)]
+      S3[(AWS S3)]
+    end
+
+    subgraph ONPREM_Environment[Data Layer - On-Prem]
+      PG[(Postgres-HA)]
+      MINIO[(MinIO - S3 Compatible)]
+    end
+
+    UA --> RDS
+    UA --> PG
+    MM --> S3
+    MM --> MINIO
+```
+
 ---
 
 ## 📊 2. Public vs Private Cloud Infrastructure Comparison
