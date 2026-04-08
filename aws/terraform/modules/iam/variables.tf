@@ -73,3 +73,45 @@ variable "target_role_policy_json" {
   type        = string
   default     = null
 }
+
+variable "create_atlantis_irsa_role" {
+  description = "Whether to create IRSA role for Atlantis service account."
+  type        = bool
+  default     = false
+}
+
+variable "atlantis_irsa_role_name" {
+  description = "IAM role name for Atlantis IRSA."
+  type        = string
+  default     = "AtlantisAssumeRole"
+}
+
+variable "eks_oidc_provider_arn" {
+  description = "OIDC provider ARN of EKS cluster running Atlantis."
+  type        = string
+  default     = null
+}
+
+variable "eks_oidc_provider_url" {
+  description = "OIDC issuer URL of EKS cluster running Atlantis (without https://)."
+  type        = string
+  default     = null
+}
+
+variable "atlantis_namespace" {
+  description = "Kubernetes namespace where Atlantis service account exists."
+  type        = string
+  default     = "atlantis"
+}
+
+variable "atlantis_service_account_name" {
+  description = "Kubernetes service account name used by Atlantis."
+  type        = string
+  default     = "atlantis"
+}
+
+variable "atlantis_target_assume_role_arns" {
+  description = "Target role ARNs Atlantis IRSA role can assume."
+  type        = list(string)
+  default     = []
+}

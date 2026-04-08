@@ -12,3 +12,8 @@ output "target_role_arn" {
   description = "Terraform deploy role ARN in child account."
   value       = try(aws_iam_role.terraform_deploy_target[0].arn, null)
 }
+
+output "atlantis_irsa_role_arn" {
+  description = "Atlantis IRSA role ARN."
+  value       = try(aws_iam_role.atlantis_irsa[0].arn, null)
+}

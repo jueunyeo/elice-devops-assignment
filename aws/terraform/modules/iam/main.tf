@@ -8,6 +8,10 @@ locals {
   computed_management_role_arn = var.management_role_arn != null ? var.management_role_arn : (
     var.management_account_id != null ? "arn:aws:iam::${var.management_account_id}:role/${var.management_role_name}" : null
   )
+
+  atlantis_oidc_provider_url = (
+    var.eks_oidc_provider_url == null ? null : replace(var.eks_oidc_provider_url, "https://", "")
+  )
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -111,4 +115,63 @@ resource "aws_iam_role_policy" "target_custom" {
   name   = "TerraformDeployCustomPolicy"
   role   = aws_iam_role.terraform_deploy_target[0].id
   policy = var.target_role_policy_json
+}
+
+data "aws_iam_policy_document" "atlantis_irsa_trust" {
+  count = var.create_atlantis_irsa_role ? 1 : 0
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.eks_oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.atlantis_oidc_provider_url}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.atlantis_oidc_provider_url}:sub"
+      values   = ["system:serviceaccount:${var.atlantis_namespace}:${var.atlantis_service_account_name}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "atlantis_irsa" {
+  count = var.create_atlantis_irsa_role ? 1 : 0
+
+  name               = var.atlantis_irsa_role_name
+  assume_role_policy = data.aws_iam_policy_document.atlantis_irsa_trust[0].json
+
+  lifecycle {
+    precondition {
+      condition     = var.eks_oidc_provider_arn != null && local.atlantis_oidc_provider_url != null
+      error_message = "eks_oidc_provider_arn and eks_oidc_provider_url are required when create_atlantis_irsa_role=true."
+    }
+  }
+}
+
+data "aws_iam_policy_document" "atlantis_assume_targets" {
+  count = var.create_atlantis_irsa_role && length(var.atlantis_target_assume_role_arns) > 0 ? 1 : 0
+
+  statement {
+    sid       = "AssumeEnvironmentRoles"
+    effect    = "Allow"
+    actions   = ["sts:AssumeRole"]
+    resources = var.atlantis_target_assume_role_arns
+  }
+}
+
+resource "aws_iam_role_policy" "atlantis_assume_targets" {
+  count = var.create_atlantis_irsa_role && length(var.atlantis_target_assume_role_arns) > 0 ? 1 : 0
+
+  name   = "AtlantisAssumeEnvironmentRoles"
+  role   = aws_iam_role.atlantis_irsa[0].id
+  policy = data.aws_iam_policy_document.atlantis_assume_targets[0].json
 }
